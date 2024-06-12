@@ -17,7 +17,7 @@
     "@celo/network-utils": "1.2.2-dev",
     "@celo/utils": "1.2.2-dev",
     "@google-cloud/monitoring": "0.7.1",
-    "@google-cloud/pubsub": "^0.28.1",
+    "@google-cloud/pubsub": "^3.0.0",
     "@google-cloud/storage": "^2.4.3",
     "bignumber.js": "^9.0.0",
     "bip32": "2.0.5",

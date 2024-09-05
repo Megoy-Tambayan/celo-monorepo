@@ -28,7 +28,7 @@
     "@types/secp256k1": "^4.0.0",
     "aws-sdk": "^2.705.0",
     "eth-lib": "^0.2.8",
-    "ethereumjs-util": "^5.2.0",
+    "ethereumjs-util": "^5.2.1",
     "bignumber.js": "^9.0.0",
     "debug": "^4.1.1",
     "secp256k1": "^4.0.0"

@@ -26,7 +26,7 @@
     "@celo/connect": "1.2.2-dev",
     "@types/ethereumjs-util": "^5.2.0",
     "eth-lib": "^0.2.8",
-    "ethereumjs-util": "^5.2.0",
+    "ethereumjs-util": "^5.2.1",
     "debug": "^4.1.1",
     "@ledgerhq/hw-app-eth": "~5.11.0",
     "@ledgerhq/hw-transport": "~5.11.0"

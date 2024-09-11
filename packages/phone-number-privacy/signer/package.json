@@ -32,7 +32,7 @@
     "blind-threshold-bls": "https://github.com/celo-org/blind-threshold-bls-wasm#e1e2f8a",
     "dotenv": "^8.2.0",
     "elliptic": "^6.5.4",
-    "express": "^4.17.1",
+    "express": "^4.20.0",
     "knex": "^0.21.1",
     "mssql": "^6.3.1",
     "mysql2": "^2.1.0",

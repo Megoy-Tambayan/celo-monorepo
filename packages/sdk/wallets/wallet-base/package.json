@@ -27,7 +27,7 @@
     "@types/debug": "^4.1.5",
     "bignumber.js": "^9.0.0",
     "eth-lib": "^0.2.8",
-    "ethereumjs-util": "^5.2.0",
+    "ethereumjs-util": "^5.2.1",
     "debug": "^4.1.1"
   },
   "engines": {

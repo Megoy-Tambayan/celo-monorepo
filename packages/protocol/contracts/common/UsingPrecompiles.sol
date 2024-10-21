@@ -25,7 +25,8 @@ contract UsingPrecompiles {
    * @param bDenominator Denominator of exponentiated fraction
    * @param exponent exponent to raise b to
    * @param _decimals precision
-   * @return numerator/denominator of the computed quantity (not reduced).
+   * @return Numerator of the computed quantity (not reduced).
+   * @return Denominator of the computed quantity (not reduced).
    */
   function fractionMulExp(
     uint256 aNumerator,
@@ -56,7 +57,7 @@ contract UsingPrecompiles {
   function getEpochSize() public view returns (uint256) {
     bytes memory out;
     bool success;
-    (success, out) = EPOCH_SIZE.staticcall(abi.encodePacked());
+    (success, out) = EPOCH_SIZE.staticcall(abi.encodePacked(true));
     require(success, "error calling getEpochSize precompile");
     return getUint256FromBytes(out, 0);
   }
@@ -79,26 +80,6 @@ contract UsingPrecompiles {
   }
 
   /**
-   * @notice Returns the epoch number at a block.
-   * @param blockNumber Block number where epoch number is calculated.
-   * @param epochSize The epoch size in blocks.
-   * @return Epoch number.
-   */
-  function epochNumberOfBlock(uint256 blockNumber, uint256 epochSize)
-    internal
-    pure
-    returns (uint256)
-  {
-    // Follows GetEpochNumber from celo-blockchain/blob/master/consensus/istanbul/utils.go
-    uint256 epochNumber = blockNumber / epochSize;
-    if (blockNumber % epochSize == 0) {
-      return epochNumber;
-    } else {
-      return epochNumber.add(1);
-    }
-  }
-
-  /**
    * @notice Gets a validator address from the current validator set.
    * @param index Index of requested validator in the validator set.
    * @return Address of validator at the requested index.
@@ -117,11 +98,10 @@ contract UsingPrecompiles {
    * @param blockNumber Block number to retrieve the validator set from.
    * @return Address of validator at the requested index.
    */
-  function validatorSignerAddressFromSet(uint256 index, uint256 blockNumber)
-    public
-    view
-    returns (address)
-  {
+  function validatorSignerAddressFromSet(
+    uint256 index,
+    uint256 blockNumber
+  ) public view returns (address) {
     bytes memory out;
     bool success;
     (success, out) = GET_VALIDATOR.staticcall(abi.encodePacked(index, blockNumber));
@@ -163,11 +143,11 @@ contract UsingPrecompiles {
    *   account address. 96 bytes.
    * @return True upon success.
    */
-  function checkProofOfPossession(address sender, bytes memory blsKey, bytes memory blsPop)
-    public
-    view
-    returns (bool)
-  {
+  function checkProofOfPossession(
+    address sender,
+    bytes memory blsKey,
+    bytes memory blsPop
+  ) public view returns (bool) {
     bool success;
     (success, ) = PROOF_OF_POSSESSION.staticcall(abi.encodePacked(sender, blsKey, blsPop));
     return success;
@@ -228,6 +208,41 @@ contract UsingPrecompiles {
   }
 
   /**
+   * @notice Returns the minimum number of required signers for a given block number.
+   * @dev Computed in celo-blockchain as int(math.Ceil(float64(2*valSet.Size()) / 3))
+   */
+  function minQuorumSize(uint256 blockNumber) public view returns (uint256) {
+    return numberValidatorsInSet(blockNumber).mul(2).add(2).div(3);
+  }
+
+  /**
+   * @notice Computes byzantine quorum from current validator set size
+   * @return Byzantine quorum of validators.
+   */
+  function minQuorumSizeInCurrentSet() public view returns (uint256) {
+    return minQuorumSize(block.number);
+  }
+
+  /**
+   * @notice Returns the epoch number at a block.
+   * @param blockNumber Block number where epoch number is calculated.
+   * @param epochSize The epoch size in blocks.
+   * @return Epoch number.
+   */
+  function epochNumberOfBlock(
+    uint256 blockNumber,
+    uint256 epochSize
+  ) internal pure returns (uint256) {
+    // Follows GetEpochNumber from celo-blockchain/blob/master/consensus/istanbul/utils.go
+    uint256 epochNumber = blockNumber / epochSize;
+    if (blockNumber % epochSize == 0) {
+      return epochNumber;
+    } else {
+      return epochNumber.add(1);
+    }
+  }
+
+  /**
    * @notice Converts bytes to uint256.
    * @param bs byte[] data
    * @param start offset into byte data to convert
@@ -251,21 +266,4 @@ contract UsingPrecompiles {
     }
     return x;
   }
-
-  /**
-   * @notice Returns the minimum number of required signers for a given block number.
-   * @dev Computed in celo-blockchain as int(math.Ceil(float64(2*valSet.Size()) / 3))
-   */
-  function minQuorumSize(uint256 blockNumber) public view returns (uint256) {
-    return numberValidatorsInSet(blockNumber).mul(2).add(2).div(3);
-  }
-
-  /**
-   * @notice Computes byzantine quorum from current validator set size
-   * @return Byzantine quorum of validators.
-   */
-  function minQuorumSizeInCurrentSet() public view returns (uint256) {
-    return minQuorumSize(block.number);
-  }
-
 }

@@ -27,14 +27,9 @@ export function getFornoUrl(celoEnv: string) {
 }
 
 export function getFornoWebSocketUrl(celoEnv: string) {
-  switch (celoEnv) {
-    case 'rc1':
-      return 'wss://forno.celo.org/ws'
-    case 'alfajores':
-      return 'wss://alfajores-forno.celo-testnet.org/ws'
-    default:
-      throw Error(`Websockets not supported for ${celoEnv} forno`)
-  }
+  return celoEnv === 'rc1'
+    ? `wss://forno.celo.org/ws`
+    : `wss://${celoEnv}-forno.${fetchEnv(envVar.CLUSTER_DOMAIN_NAME)}.org/ws`
 }
 
 export function getFullNodeHttpRpcInternalUrl(celoEnv: string) {
@@ -43,4 +38,12 @@ export function getFullNodeHttpRpcInternalUrl(celoEnv: string) {
 
 export function getFullNodeWebSocketRpcInternalUrl(celoEnv: string) {
   return `ws://${celoEnv}-fullnodes-rpc.${celoEnv}.svc.cluster.local:8546`
+}
+
+export function getLightNodeHttpRpcInternalUrl(celoEnv: string) {
+  return `http://${celoEnv}-lightnodes-rpc.${celoEnv}.svc.cluster.local:8545`
+}
+
+export function getLightNodeWebSocketRpcInternalUrl(celoEnv: string) {
+  return `ws://${celoEnv}-lightnodes-rpc.${celoEnv}.svc.cluster.local:8546`
 }

@@ -32,10 +32,48 @@ geth:
     requests:
       memory: "256Mi"
       cpu: "500m"
-    limits:
-      memory: "4Gi"
-      cpu: "4"
-  fullnodeCheckBlockAge: true
+    limits: {}
+    # limits:
+    #   memory: "4Gi"
+    #   cpu: "4"
+  validatorResources: {}
+  secondaryResources: {}
+  proxyResources: {}
+  txNodeResources: {}
+  txNodePrivateResources: {}
+  ws_port: 8546
+  rpc_gascap: 10000000
+  validatorExtraSnippet: |
+    echo "Validator"
+  secondayExtraSnippet: |
+    echo "secondary-validator"
+  proxyExtraSnippet: |
+    echo "Proxy"
+  txNodeExtraSnippet: |
+    echo "txnode"
+  txNodePrivateExtraSnippet: |
+    echo "txnode-private"
+    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} --http.timeout.read 600 --http.timeout.write 600 --http.timeout.idle 2400"
+  validatorAffinity: {}
+  validatorNodeSelector: {}
+  validatorTolerations: []
+  secondaryAffinity: {}
+  secondaryNodeSelector: {}
+  secondaryTolerations: []
+  proxyAffinity: {}
+  proxyNodeSelector: {}
+  proxyTolerations: []
+  txNodeAffinity: {}
+  txNodeNodeSelector: {}
+  txNodeTolerations: []
+  txNodePrivateAffinity: {}
+  txNodePrivateNodeSelector: {}
+  txNodePrivateTolerations: []
+  storageClass: ssd
+  maxpeers: 1150
+  light:
+    maxpeers: 1000
+    serve: 70
 
 # UpdateStrategy for statefulsets only. Partition=0 is default rollingUpdate behaviour.
 updateStrategy:
@@ -79,3 +117,25 @@ blockscout:
 
 domain:
   name: celo-networks-dev
+
+ingressClassName: nginx
+
+extraPodLabels:
+  validator:
+    mode: full
+  secondary:
+    mode: full
+  proxy:
+    mode: full
+  txnode:
+    mode: full
+  txnode_private:
+    stack: blockscout
+    mode: archive
+
+pvcAnnotations:
+  validator: {}
+  secondary: {}
+  proxy: {}
+  txnode: {}
+  txnode_private: {}

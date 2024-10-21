@@ -14,9 +14,21 @@ library Proposals {
   using SafeMath for uint256;
   using BytesLib for bytes;
 
-  enum Stage { None, Queued, Approval, Referendum, Execution, Expiration }
+  enum Stage {
+    None,
+    Queued,
+    Approval,
+    Referendum,
+    Execution,
+    Expiration
+  }
 
-  enum VoteValue { None, Abstain, No, Yes }
+  enum VoteValue {
+    None,
+    Abstain,
+    No,
+    Yes
+  }
 
   struct StageDurations {
     uint256 approval;
@@ -45,14 +57,6 @@ library Proposals {
     bool approved;
     uint256 networkWeight;
     string descriptionUrl;
-  }
-
-  /**
-   * @notice Returns the storage, major, minor, and patch version of the contract.
-   * @return The storage, major, minor, and patch version of the contract.
-   */
-  function getVersionNumber() external pure returns (uint256, uint256, uint256, uint256) {
-    return (1, 1, 1, 0);
   }
 
   /**
@@ -95,85 +99,34 @@ library Proposals {
     }
   }
 
-  function setDescriptionUrl(Proposal storage proposal, string memory descriptionUrl) internal {
-    require(bytes(descriptionUrl).length != 0, "Description url must have non-zero length");
-    proposal.descriptionUrl = descriptionUrl;
-  }
-
-  /**
-   * @notice Constructs a proposal for use in memory.
-   * @param values The values of CELO to be sent in the proposed transactions.
-   * @param destinations The destination addresses of the proposed transactions.
-   * @param data The concatenated data to be included in the proposed transactions.
-   * @param dataLengths The lengths of each transaction's data.
-   * @param proposer The proposer.
-   * @param deposit The proposal deposit.
-   */
-  function makeMem(
-    uint256[] memory values,
-    address[] memory destinations,
-    bytes memory data,
-    uint256[] memory dataLengths,
-    address proposer,
-    uint256 deposit
-  ) internal view returns (Proposal memory) {
-    require(
-      values.length == destinations.length && destinations.length == dataLengths.length,
-      "Array length mismatch"
-    );
-    uint256 transactionCount = values.length;
-
-    Proposal memory proposal;
-    proposal.proposer = proposer;
-    proposal.deposit = deposit;
-    // solhint-disable-next-line not-rely-on-time
-    proposal.timestamp = now;
-
-    uint256 dataPosition = 0;
-    proposal.transactions = new Transaction[](transactionCount);
-    for (uint256 i = 0; i < transactionCount; i = i.add(1)) {
-      proposal.transactions[i] = Transaction(
-        values[i],
-        destinations[i],
-        data.slice(dataPosition, dataLengths[i])
-      );
-      dataPosition = dataPosition.add(dataLengths[i]);
-    }
-    return proposal;
-  }
-
   /**
    * @notice Adds or changes a vote on a proposal.
    * @param proposal The proposal struct.
-   * @param previousWeight The previous weight of the vote.
-   * @param currentWeight The current weight of the vote.
-   * @param previousVote The vote to be removed, or None for a new vote.
-   * @param currentVote The vote to be set.
+   * @param previousYesVotes The previous yes votes weight.
+   * @param previousNoVotes The previous no votes weight.
+   * @param previousAbstainVotes The previous abstain votes weight.
+   * @param yesVotes The current yes votes weight.
+   * @param noVotes The current no votes weight.
+   * @param abstainVotes The current abstain votes weight.
    */
   function updateVote(
     Proposal storage proposal,
-    uint256 previousWeight,
-    uint256 currentWeight,
-    VoteValue previousVote,
-    VoteValue currentVote
+    uint256 previousYesVotes,
+    uint256 previousNoVotes,
+    uint256 previousAbstainVotes,
+    uint256 yesVotes,
+    uint256 noVotes,
+    uint256 abstainVotes
   ) public {
     // Subtract previous vote.
-    if (previousVote == VoteValue.Abstain) {
-      proposal.votes.abstain = proposal.votes.abstain.sub(previousWeight);
-    } else if (previousVote == VoteValue.Yes) {
-      proposal.votes.yes = proposal.votes.yes.sub(previousWeight);
-    } else if (previousVote == VoteValue.No) {
-      proposal.votes.no = proposal.votes.no.sub(previousWeight);
-    }
+    proposal.votes.yes = proposal.votes.yes.sub(previousYesVotes);
+    proposal.votes.no = proposal.votes.no.sub(previousNoVotes);
+    proposal.votes.abstain = proposal.votes.abstain.sub(previousAbstainVotes);
 
     // Add new vote.
-    if (currentVote == VoteValue.Abstain) {
-      proposal.votes.abstain = proposal.votes.abstain.add(currentWeight);
-    } else if (currentVote == VoteValue.Yes) {
-      proposal.votes.yes = proposal.votes.yes.add(currentWeight);
-    } else if (currentVote == VoteValue.No) {
-      proposal.votes.no = proposal.votes.no.add(currentWeight);
-    }
+    proposal.votes.yes = proposal.votes.yes.add(yesVotes);
+    proposal.votes.no = proposal.votes.no.add(noVotes);
+    proposal.votes.abstain = proposal.votes.abstain.add(abstainVotes);
   }
 
   /**
@@ -183,6 +136,28 @@ library Proposals {
    */
   function execute(Proposal storage proposal) public {
     executeTransactions(proposal.transactions);
+  }
+
+  /**
+   * @notice Returns a specified transaction in a proposal.
+   * @param proposal The proposal struct.
+   * @param index The index of the specified transaction in the proposal's transaction list.
+   * @return Transaction value.
+   * @return Transaction destination.
+   * @return Transaction data.
+   */
+  function getTransaction(
+    Proposal storage proposal,
+    uint256 index
+  ) public view returns (uint256, address, bytes memory) {
+    require(index < proposal.transactions.length, "getTransaction: bad index");
+    Transaction storage transaction = proposal.transactions[index];
+    return (transaction.value, transaction.destination, transaction.data);
+  }
+
+  function setDescriptionUrl(Proposal storage proposal, string memory descriptionUrl) internal {
+    require(bytes(descriptionUrl).length != 0, "Description url must have non-zero length");
+    proposal.descriptionUrl = descriptionUrl;
   }
 
   /**
@@ -237,37 +212,45 @@ library Proposals {
   }
 
   /**
-   * @notice Returns the stage of a dequeued proposal.
-   * @param proposal The proposal struct.
-   * @param stageDurations The durations of the dequeued proposal stages.
-   * @return The stage of the dequeued proposal.
-   * @dev Must be called on a dequeued proposal.
+   * @notice Constructs a proposal for use in memory.
+   * @param values The values of CELO to be sent in the proposed transactions.
+   * @param destinations The destination addresses of the proposed transactions.
+   * @param data The concatenated data to be included in the proposed transactions.
+   * @param dataLengths The lengths of each transaction's data.
+   * @param proposer The proposer.
+   * @param deposit The proposal deposit.
    */
-  function getDequeuedStage(Proposal storage proposal, StageDurations storage stageDurations)
-    internal
-    view
-    returns (Stage)
-  {
-    uint256 stageStartTime = proposal
-      .timestamp
-      .add(stageDurations.approval)
-      .add(stageDurations.referendum)
-      .add(stageDurations.execution);
+  function makeMem(
+    uint256[] memory values,
+    address[] memory destinations,
+    bytes memory data,
+    uint256[] memory dataLengths,
+    address proposer,
+    uint256 deposit
+  ) internal view returns (Proposal memory) {
+    require(
+      values.length == destinations.length && destinations.length == dataLengths.length,
+      "Array length mismatch"
+    );
+    uint256 transactionCount = values.length;
+
+    Proposal memory proposal;
+    proposal.proposer = proposer;
+    proposal.deposit = deposit;
     // solhint-disable-next-line not-rely-on-time
-    if (now >= stageStartTime) {
-      return Stage.Expiration;
+    proposal.timestamp = now;
+
+    uint256 dataPosition = 0;
+    proposal.transactions = new Transaction[](transactionCount);
+    for (uint256 i = 0; i < transactionCount; i = i.add(1)) {
+      proposal.transactions[i] = Transaction(
+        values[i],
+        destinations[i],
+        data.slice(dataPosition, dataLengths[i])
+      );
+      dataPosition = dataPosition.add(dataLengths[i]);
     }
-    stageStartTime = stageStartTime.sub(stageDurations.execution);
-    // solhint-disable-next-line not-rely-on-time
-    if (now >= stageStartTime) {
-      return Stage.Execution;
-    }
-    stageStartTime = stageStartTime.sub(stageDurations.referendum);
-    // solhint-disable-next-line not-rely-on-time
-    if (now >= stageStartTime) {
-      return Stage.Referendum;
-    }
-    return Stage.Approval;
+    return proposal;
   }
 
   /**
@@ -276,60 +259,47 @@ library Proposals {
    * @param proposal The proposal struct.
    * @return The participation of the proposal.
    */
-  function getParticipation(Proposal storage proposal)
-    internal
-    view
-    returns (FixidityLib.Fraction memory)
-  {
+  function getParticipation(
+    Proposal storage proposal
+  ) internal view returns (FixidityLib.Fraction memory) {
     uint256 totalVotes = proposal.votes.yes.add(proposal.votes.no).add(proposal.votes.abstain);
     return FixidityLib.newFixedFraction(totalVotes, proposal.networkWeight);
   }
 
   /**
-   * @notice Returns a specified transaction in a proposal.
-   * @param proposal The proposal struct.
-   * @param index The index of the specified transaction in the proposal's transaction list.
-   * @return The specified transaction.
-   */
-  function getTransaction(Proposal storage proposal, uint256 index)
-    public
-    view
-    returns (uint256, address, bytes memory)
-  {
-    require(index < proposal.transactions.length, "getTransaction: bad index");
-    Transaction storage transaction = proposal.transactions[index];
-    return (transaction.value, transaction.destination, transaction.data);
-  }
-
-  /**
    * @notice Returns an unpacked proposal struct with its transaction count.
    * @param proposal The proposal struct.
-   * @return The unpacked proposal with its transaction count.
+   * @return proposer
+   * @return deposit
+   * @return timestamp
+   * @return transaction Transaction count.
+   * @return description Description url.
+   * @return networkWeight Network weight.
    */
-  function unpack(Proposal storage proposal)
-    internal
-    view
-    returns (address, uint256, uint256, uint256, string storage)
-  {
+  function unpack(
+    Proposal storage proposal
+  ) internal view returns (address, uint256, uint256, uint256, string storage, uint256, bool) {
     return (
       proposal.proposer,
       proposal.deposit,
       proposal.timestamp,
       proposal.transactions.length,
-      proposal.descriptionUrl
+      proposal.descriptionUrl,
+      proposal.networkWeight,
+      proposal.approved
     );
   }
 
   /**
    * @notice Returns the referendum vote totals for a proposal.
    * @param proposal The proposal struct.
-   * @return The yes, no, and abstain vote totals.
+   * @return The yes vote totals.
+   * @return The no vote totals.
+   * @return The abstain vote totals.
    */
-  function getVoteTotals(Proposal storage proposal)
-    internal
-    view
-    returns (uint256, uint256, uint256)
-  {
+  function getVoteTotals(
+    Proposal storage proposal
+  ) internal view returns (uint256, uint256, uint256) {
     return (proposal.votes.yes, proposal.votes.no, proposal.votes.abstain);
   }
 
@@ -360,10 +330,12 @@ library Proposals {
    * @param dataLength The length of the data to be included in the function call.
    * @param data The data to be included in the function call.
    */
-  function externalCall(address destination, uint256 value, uint256 dataLength, bytes memory data)
-    private
-    returns (bool)
-  {
+  function externalCall(
+    address destination,
+    uint256 value,
+    uint256 dataLength,
+    bytes memory data
+  ) private returns (bool) {
     bool result;
 
     if (dataLength > 0) require(Address.isContract(destination), "Invalid contract address");

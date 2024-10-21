@@ -1,5 +1,5 @@
 import { BlockHeader } from '@celo/connect'
-import { DefaultRpcCaller, RpcCaller } from '@celo/connect/lib/utils/rpc-caller'
+import { HttpRpcCaller, RpcCaller } from '@celo/connect/lib/utils/rpc-caller'
 import { privateKeyToAddress } from '@celo/utils/lib/address'
 import { bitIsSet, parseBlockExtraData } from '@celo/utils/lib/istanbul'
 import { assert } from 'chai'
@@ -35,7 +35,7 @@ const verbose = false
 
 describe('replica swap tests', () => {
   const gethConfig: GethRunConfig = {
-    migrate: false,
+    migrate: true,
     runPath: TMP_PATH,
     verbosity: 4,
     networkId: 1101,
@@ -44,6 +44,7 @@ describe('replica swap tests', () => {
       blockTime: 1,
       churritoBlock: 0,
       donutBlock: 0,
+      espressoBlock: 0,
     },
     instances: [
       {
@@ -132,7 +133,7 @@ describe('replica swap tests', () => {
 
       await restart()
 
-      const proxyPubKey = privateKeyToPublicKey(gethConfig.instances[1].nodekey!)
+      const proxyPubKey = privateKeyToPublicKey(gethConfig.instances[1].nodekey)
       const replica: GethInstanceConfig = {
         name: 'validator0-replica0',
         replica: true,
@@ -141,7 +142,7 @@ describe('replica swap tests', () => {
         port: 30315,
         rpcport: 8555,
         privateKey: gethConfig.instances[0].privateKey,
-        minerValidator: privateKeyToAddress(gethConfig.instances[0].privateKey!),
+        minerValidator: privateKeyToAddress(gethConfig.instances[0].privateKey),
         proxy: 'validator0-proxy0',
         isProxied: true,
         proxyport: 30304,
@@ -168,9 +169,9 @@ describe('replica swap tests', () => {
       const validatorWSWeb3Url = 'ws://localhost:8544'
       const validatorWSWeb3 = new Web3(validatorWSWeb3Url)
 
-      validatoRPC = new DefaultRpcCaller(new Web3.providers.HttpProvider('http://localhost:8545'))
-      proxyRPC = new DefaultRpcCaller(new Web3.providers.HttpProvider('http://localhost:8546'))
-      replicaRPC = new DefaultRpcCaller(new Web3.providers.HttpProvider('http://localhost:8555'))
+      validatoRPC = new HttpRpcCaller(new Web3.providers.HttpProvider('http://localhost:8545'))
+      proxyRPC = new HttpRpcCaller(new Web3.providers.HttpProvider('http://localhost:8546'))
+      replicaRPC = new HttpRpcCaller(new Web3.providers.HttpProvider('http://localhost:8555'))
 
       const handled: any = {}
       let errorMsg = ''
@@ -185,7 +186,6 @@ describe('replica swap tests', () => {
             if (verbose) {
               console.info(`Swapping validators at block ${swapBlock}`)
             }
-            // tslint:disable-next-line: no-shadowed-variable
             let resp = await replicaRPC.call(IstanbulManagement.startAtBlock, [swapBlock])
             assert.equal(resp.error, null)
             resp = await validatoRPC.call(IstanbulManagement.stopAtBlock, [swapBlock])
@@ -200,7 +200,7 @@ describe('replica swap tests', () => {
               missed.push({ idx: i, num: header.number })
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error(e)
           errorMsg = e
         }
@@ -229,17 +229,17 @@ describe('replica swap tests', () => {
     })
 
     it('replica is validating', async () => {
-      const validating = (await replicaRPC.call(IstanbulManagement.validating, [])).result as any
+      const validating = (await replicaRPC.call(IstanbulManagement.validating, [])).result
       assert.isTrue(validating)
     })
 
     it('primary is not validating', async () => {
-      const validating = (await validatoRPC.call(IstanbulManagement.validating, [])).result as any
+      const validating = (await validatoRPC.call(IstanbulManagement.validating, [])).result
       assert.isFalse(validating)
     })
 
     it('replica should have good val enode table', async () => {
-      const resp = (await replicaRPC.call(IstanbulManagement.valEnodeTableInfo, [])).result as any
+      const resp = (await replicaRPC.call(IstanbulManagement.valEnodeTableInfo, [])).result
       Object.keys(resp).forEach((k) => {
         const enode = resp[k].enode
         assert.isTrue((enode || '') !== '')
@@ -252,7 +252,7 @@ describe('replica swap tests', () => {
       assert.equal(resp.length, 2)
     })
 
-    it('should switch without downtime', async () => {
+    it('should switch without downtime', () => {
       if (missed.length !== 0) {
         missed.forEach((x: any) => console.warn(`Validator idx ${x.idx} missed block ${x.num}`))
         console.warn(`Val idx 0 should have switched on block ${swapBlock}`)

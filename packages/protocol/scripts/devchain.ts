@@ -1,7 +1,7 @@
-import ganache from '@celo/ganache-cli'
 import chalk from 'chalk'
 import { spawn, SpawnOptions } from 'child_process'
 import fs from 'fs-extra'
+import ganache from 'ganache'
 import path from 'path'
 import targz from 'targz'
 import tmp from 'tmp'
@@ -15,11 +15,14 @@ const gasLimit = 20000000
 
 const ProtocolRoot = path.normalize(path.join(__dirname, '../'))
 
+// As documented https://circleci.com/docs/2.0/env-vars/#built-in-environment-variables
+const isCI = process.env.CI === 'true'
+
 // Move to where the caller made the call So to have relative paths
 const CallerCWD = process.env.INIT_CWD ? process.env.INIT_CWD : process.cwd()
 process.chdir(CallerCWD)
 
-// tslint:disable-next-line: no-unused-expression
+// eslint-disable-next-line @typescript-eslint/no-unused-expressions
 yargs
   .scriptName('devchain')
   .recommendCommands()
@@ -48,6 +51,12 @@ yargs
     "Run celo's devchain using given tar filename. Generates a copy and then delete it",
     (args) => args.positional('filename', { type: 'string', description: 'Chain tar filename' }),
     (args) => exitOnError(runDevChainFromTar(args.filename))
+  )
+  .command(
+    'run-tar-in-bg <filename>',
+    "Run celo's devchain using given tar filename. Generates a copy and then delete it",
+    (args) => args.positional('filename', { type: 'string', description: 'Chain tar filename' }),
+    (args) => exitOnError(runDevChainFromTarInBackGround(args.filename))
   )
   .command(
     'generate <datadir>',
@@ -99,58 +108,49 @@ yargs
           targz: true,
         })
       )
+  )
+  .command(
+    'compress-chain <datadir> <filename>',
+    'Create a devchain.tar.gz from specified datadir',
+    (args) =>
+      args
+        .positional('datadir', { type: 'string', description: 'datadir path' })
+        .positional('filename', { type: 'string', description: 'chain tar filename' }),
+    (args) => exitOnError(compressChain(args.datadir, args.filename))
   ).argv
 
-async function startGanache(
-  datadir: string,
-  opts: { verbose?: boolean },
-  chainCopy?: tmp.DirResult
-) {
+function startGanache(datadir: string, opts: { verbose?: boolean }, chainCopy?: tmp.DirResult) {
   const logFn = opts.verbose
-    ? // tslint:disable-next-line: no-console
-      (...args: any[]) => console.log(...args)
+    ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      (...args: any[]) => console.info(...args)
     : () => {
-        /*nothing*/
+        /* nothing */
       }
 
   const server = ganache.server({
-    default_balance_ether: 200000000,
-    logger: {
-      log: logFn,
-    },
-    network_id: 1101,
-    db_path: datadir,
-    mnemonic: MNEMONIC,
-    gasLimit,
-    allowUnlimitedContractSize: true,
+    logging: { logger: { log: logFn } },
+    database: { dbPath: datadir },
+    wallet: { mnemonic: MNEMONIC, defaultBalance: 200000000 },
+    miner: { blockGasLimit: gasLimit },
+    chain: { networkId: 1101, chainId: 1, allowUnlimitedContractSize: true },
+    allowUnlimitedInitCodeSize: true,
   })
 
-  await new Promise((resolve, reject) => {
-    server.listen(8545, (err, blockchain) => {
-      if (err) {
-        reject(err)
-      } else {
-        // tslint:disable-next-line: no-console
-        console.log(chalk.red('Ganache STARTED'))
-        // console.log(blockchain)
-        resolve(blockchain)
-      }
-    })
+  server.listen(8545, (err) => {
+    if (err) {
+      throw err
+    }
+    // eslint-disable-next-line: no-console
+    console.info(chalk.red('Ganache STARTED'))
   })
 
-  return () =>
-    new Promise((resolve, reject) => {
-      server.close((err) => {
-        if (chainCopy) {
-          chainCopy.removeCallback()
-        }
-        if (err) {
-          reject(err)
-        } else {
-          resolve()
-        }
-      })
-    })
+  return async () => {
+    await server.close()
+    if (chainCopy) {
+      chainCopy.removeCallback()
+    }
+    console.info(chalk.red('Ganache server CLOSED'))
+  }
 }
 
 export function execCmd(
@@ -158,7 +158,7 @@ export function execCmd(
   args: string[],
   options?: SpawnOptions & { silent?: boolean }
 ) {
-  return new Promise<number>(async (resolve, reject) => {
+  return new Promise<number>((resolve, reject) => {
     const { silent, ...spawnOptions } = options || { silent: false }
     if (!silent) {
       console.debug('$ ' + [cmd].concat(args).join(' '))
@@ -206,7 +206,8 @@ function runMigrations(opts: { upto?: number; migrationOverride?: string } = {})
 
   if (opts.migrationOverride) {
     cmdArgs.push('--migration_override')
-    cmdArgs.push(fs.readFileSync(opts.migrationOverride).toString())
+    const file: string = fs.readFileSync(opts.migrationOverride).toString()
+    cmdArgs.push(file)
   }
   return execCmd(`yarn`, cmdArgs, { cwd: ProtocolRoot })
 }
@@ -237,26 +238,53 @@ function deployReleaseGold(releaseGoldContracts: string) {
 
 async function runDevChainFromTar(filename: string) {
   const chainCopy: tmp.DirResult = tmp.dirSync({ keep: false, unsafeCleanup: true })
-  // tslint:disable-next-line: no-console
-  console.log(`Creating tmp folder: ${chainCopy.name}`)
+  // eslint-disable-next-line: no-console
+  console.info(`Creating tmp folder: ${chainCopy.name}`)
 
   await decompressChain(filename, chainCopy.name)
 
-  const stopGanache = await startGanache(chainCopy.name, { verbose: true }, chainCopy)
+  console.info('Starting Ganache ...')
+  const stopGanache = startGanache(chainCopy.name, { verbose: true }, chainCopy)
+  if (isCI) {
+    // If we are running on circle ci we need to wait for ganache to be up.
+    await waitForPortOpen('localhost', 8545, 120)
+  }
+
   return stopGanache
 }
 
+/// This function was created to replace `startInBgAndWaitForString` in `release-on-devchain.sh`
+/// and intended to be run on a hosted instances that shutdown after execution.
+/// Note: If you run this locally, you will need to properly cleanup tmp.DirResult and
+/// manually close the detached ganache instance.
+/// see https://trufflesuite.com/docs/ganache/reference/cli-options/#manage-detached-instances for more details
+async function runDevChainFromTarInBackGround(filename: string) {
+  const cmdArgs = ['ganache-devchain', '-d']
+
+  // keep is set to true, because `release-on-devchain` fails when set to false.
+  const chainCopy: tmp.DirResult = tmp.dirSync({ keep: true, unsafeCleanup: true })
+
+  // eslint-disable-next-line: no-console
+  console.info(`Creating tmp folder: ${chainCopy.name}`)
+
+  await decompressChain(filename, chainCopy.name)
+
+  cmdArgs.push(chainCopy.name)
+
+  return execCmd(`yarn`, cmdArgs, { cwd: ProtocolRoot })
+}
+
 function decompressChain(tarPath: string, copyChainPath: string): Promise<void> {
-  // tslint:disable-next-line: no-console
-  console.log('Decompressing chain')
+  // eslint-disable-next-line: no-console
+  console.info('Decompressing chain')
   return new Promise((resolve, reject) => {
     targz.decompress({ src: tarPath, dest: copyChainPath }, (err) => {
       if (err) {
         console.error(err)
         reject(err)
       } else {
-        // tslint:disable-next-line: no-console
-        console.log('Chain decompressed')
+        // eslint-disable-next-line: no-console
+        console.info('Chain decompressed')
         resolve()
       }
     })
@@ -278,18 +306,25 @@ async function runDevChain(
     await resetDir(datadir)
   }
   createDirIfMissing(datadir)
-  const stopGanache = await startGanache(datadir, { verbose: true })
+  console.info('Starting Ganache ...')
+  const stopGanache = startGanache(datadir, { verbose: true })
+  if (isCI) {
+    // If we are running on circle ci we need to wait for ganache to be up.
+    await waitForPortOpen('localhost', 8545, 120)
+  }
   if (opts.reset || opts.runMigrations) {
     const code = await runMigrations({ upto: opts.upto, migrationOverride: opts.migrationOverride })
     if (code !== 0) {
       throw Error('Migrations failed')
     }
+    console.info('Migrations successfully applied')
   }
   if (opts.releaseGoldContracts) {
     const code = await deployReleaseGold(opts.releaseGoldContracts)
     if (code !== 0) {
       throw Error('ReleaseGold deployment failed')
     }
+    console.info('ReleaseGold successfully deployed')
   }
   return stopGanache
 }
@@ -326,20 +361,42 @@ async function generateDevChain(
 }
 
 async function compressChain(chainPath: string, filename: string): Promise<void> {
-  // tslint:disable-next-line: no-console
-  console.log('Compressing chain')
+  // eslint-disable-next-line: no-console
+  console.info('Compressing chain')
   return new Promise((resolve, reject) => {
     // ensures the path to the file
     fs.ensureFileSync(filename)
-    targz.compress({ src: chainPath, dest: filename }, async (err: Error) => {
+    targz.compress({ src: chainPath, dest: filename }, (err: Error) => {
       if (err) {
         console.error(err)
         reject(err)
       } else {
-        // tslint:disable-next-line: no-console
-        console.log('Chain compressed')
+        // eslint-disable-next-line: no-console
+        console.info('Chain compressed')
         resolve()
       }
     })
   })
+}
+
+export async function waitForPortOpen(host: string, port: number, seconds: number) {
+  console.info(`Waiting for ${host}:${port} to open for ${seconds}s`)
+  const deadline = Date.now() + seconds * 1000
+  do {
+    if (await isPortOpen(host, port)) {
+      await delay(10000) // extra 10s just to give ganache extra time to startup
+      console.info(`Port ${host}:${port} opened`)
+      return true
+    }
+  } while (Date.now() < deadline)
+  console.info('Port was not opened in time')
+  return false
+}
+
+async function isPortOpen(host: string, port: number) {
+  return (await execCmd('nc', ['-z', host, port.toString()], { silent: true })) === 0
+}
+
+function delay(time: number) {
+  return new Promise((resolve) => setTimeout(resolve, time))
 }

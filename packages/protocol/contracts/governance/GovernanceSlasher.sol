@@ -16,6 +16,12 @@ contract GovernanceSlasher is Ownable, Initializable, UsingRegistry {
   event GovernanceSlashPerformed(address indexed account, uint256 amount);
 
   /**
+   * @notice Sets initialized == true on implementation contracts
+   * @param test Set to true to skip implementation initialization
+   */
+  constructor(bool test) public Initializable(test) {}
+
+  /**
    * @notice Used in place of the constructor to allow the contract to be upgradable via proxy.
    * @param registryAddress The address of the registry core smart contract.
    */
@@ -33,15 +39,6 @@ contract GovernanceSlasher is Ownable, Initializable, UsingRegistry {
   function approveSlashing(address account, uint256 penalty) external onlyOwner {
     slashed[account] = slashed[account].add(penalty);
     emit SlashingApproved(account, penalty);
-  }
-
-  /**
-   * @notice Gets account penalty.
-   * @param account Address that is punished.
-   * @return Amount slashed.
-   */
-  function getApprovedSlashing(address account) external view returns (uint256) {
-    return slashed[account];
   }
 
   /**
@@ -71,5 +68,14 @@ contract GovernanceSlasher is Ownable, Initializable, UsingRegistry {
     );
     emit GovernanceSlashPerformed(account, penalty);
     return true;
+  }
+
+  /**
+   * @notice Gets account penalty.
+   * @param account Address that is punished.
+   * @return Amount slashed.
+   */
+  function getApprovedSlashing(address account) external view returns (uint256) {
+    return slashed[account];
   }
 }

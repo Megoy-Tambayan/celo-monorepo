@@ -6,6 +6,8 @@
  * an environment.
  */
 
+import { ContractPackage, MENTO_PACKAGE, SOLIDITY_08_PACKAGE } from "../contractPackages";
+
 export const celoRegistryAddress = '0x000000000000000000000000000000000000ce10'
 
 export enum CeloContractName {
@@ -19,46 +21,70 @@ export enum CeloContractName {
   Escrow = 'Escrow',
   Exchange = 'Exchange',
   ExchangeEUR = 'ExchangeEUR',
+  ExchangeBRL = 'ExchangeBRL',
+  FederatedAttestations = 'FederatedAttestations',
+  FeeHandler = 'FeeHandler',
+  MentoFeeHandlerSeller = 'MentoFeeHandlerSeller',
   FeeCurrencyWhitelist = 'FeeCurrencyWhitelist',
   Freezer = 'Freezer',
   GasPriceMinimum = 'GasPriceMinimum',
+  FeeCurrencyDirectory = 'FeeCurrencyDirectory',
   GoldToken = 'GoldToken',
   Governance = 'Governance',
   GovernanceSlasher = 'GovernanceSlasher',
   GovernanceApproverMultiSig = 'GovernanceApproverMultiSig',
+  GrandaMento = 'GrandaMento',
   LockedGold = 'LockedGold',
+  MintGoldSchedule = 'MintGoldSchedule',
+  OdisPayments = 'OdisPayments',
   Random = 'Random',
   Reserve = 'Reserve',
   ReserveSpenderMultiSig = 'ReserveSpenderMultiSig',
   SortedOracles = 'SortedOracles',
   StableToken = 'StableToken',
   StableTokenEUR = 'StableTokenEUR',
+  StableTokenBRL = 'StableTokenBRL',
   TransferWhitelist = 'TransferWhitelist',
+  UniswapFeeHandlerSeller = 'UniswapFeeHandlerSeller',
   Validators = 'Validators',
 }
 
 export const usesRegistry = [
-  CeloContractName.Escrow,
   CeloContractName.Reserve,
   CeloContractName.StableToken,
 ]
 
-export const hasEntryInRegistry: string[] = [
-  CeloContractName.Accounts,
-  CeloContractName.Attestations,
-  CeloContractName.BlockchainParameters,
-  CeloContractName.DoubleSigningSlasher,
-  CeloContractName.DowntimeSlasher,
-  CeloContractName.Election,
-  CeloContractName.Escrow,
-  CeloContractName.Exchange,
-  CeloContractName.FeeCurrencyWhitelist,
-  CeloContractName.Freezer,
-  CeloContractName.GasPriceMinimum,
-  CeloContractName.GoldToken,
-  CeloContractName.GovernanceSlasher,
-  CeloContractName.Random,
-  CeloContractName.Reserve,
-  CeloContractName.SortedOracles,
-  CeloContractName.StableToken,
+export const hasEntryInRegistry: ContractPackage[] = [
+  {
+    name: "default",
+    contracts: [
+      CeloContractName.Accounts,
+      CeloContractName.Attestations,
+      CeloContractName.BlockchainParameters,
+      CeloContractName.DoubleSigningSlasher,
+      CeloContractName.DowntimeSlasher,
+      CeloContractName.Election,
+      CeloContractName.Escrow,
+      CeloContractName.FederatedAttestations,
+      CeloContractName.FeeCurrencyWhitelist,
+      CeloContractName.Freezer,
+      CeloContractName.GoldToken,
+      CeloContractName.GovernanceSlasher,
+      CeloContractName.OdisPayments,
+      CeloContractName.Random,
+      CeloContractName.SortedOracles,
+    ]
+  },
+  SOLIDITY_08_PACKAGE
+  ,
+  {
+    ...MENTO_PACKAGE,
+    // not all Mentro contracts are supposed to be in the Registry
+    contracts: [
+      CeloContractName.Exchange,
+      CeloContractName.GrandaMento,
+      CeloContractName.Reserve,
+      CeloContractName.StableToken,
+    ],
+  }
 ]

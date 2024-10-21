@@ -1,4 +1,4 @@
-// tslint:disable: max-classes-per-file
+/* eslint-disable max-classes-per-file: 0 */
 import { BuildArtifacts } from '@openzeppelin/upgrades'
 import ContractAST from '@openzeppelin/upgrades/lib/utils/ContractAST'
 
@@ -73,8 +73,9 @@ export class CategorizedChanges {
     reports: ASTReports,
     categorizer: Categorizer): CategorizedChanges {
     const storage = reports.storage.filter(r => !r.compatible)
+    const storageExpandedReports = reports.storage.filter(r => r.expanded)
     const c = categorize(reports.code.getChanges().concat(reports.libraryLinking), categorizer)
-    const major = c[ChangeType.Major]
+    const major = [...c[ChangeType.Major], ...storageExpandedReports.map(r => ({ getContract: () => r.contract, accept: () => null}))]
     const minor = c[ChangeType.Minor]
     const patch = c[ChangeType.Patch]
     return new CategorizedChanges(storage, major, minor, patch)
@@ -121,12 +122,20 @@ export interface ASTVersionedReportIndex {
   libraries: CategorizedChangesIndex
 }
 
-export const isLibrary = (contract: string, artifacts: BuildArtifacts) => {
-  const artifact = artifacts.getArtifactByName(contract)
-  const zContract = makeZContract(artifact)
-  const ast = new ContractAST(zContract, artifacts)
-  const kind = ast.getContractNode().contractKind
-  return kind === 'library'
+export const isLibrary = (contract: string, artifactsSet: BuildArtifacts[]) => {
+  for (const artifacts of artifactsSet){
+
+    const artifact = artifacts.getArtifactByName(contract)
+    if (artifact === undefined){
+      // EAFP
+      // the library may be in another package
+      continue
+    }
+    const zContract = makeZContract(artifact)
+    const ast = new ContractAST(zContract, artifacts)
+    const kind = ast.getContractNode().contractKind
+    return kind === 'library'
+  }
 }
 
 /**
@@ -157,14 +166,14 @@ export class ASTVersionedReport {
    * {contract name => {@link ASTVersionedReport}}, each built
    * by the {@link CategorizedChanges} for each contract.
    */
-  static createByContract = (changes: CategorizedChanges, artifacts: BuildArtifacts): ASTVersionedReportIndex => {
+  static createByContract = (changes: CategorizedChanges, artifactsSet: BuildArtifacts[]): ASTVersionedReportIndex => {
     const changesByContract = changes.byContract()
     const reportIndex: ASTVersionedReportIndex = {
       contracts: {},
       libraries: {}
     }
     Object.keys(changesByContract).forEach((contract: string) => {
-      if (isLibrary(contract, artifacts)) {
+      if (isLibrary(contract, artifactsSet)) {
         reportIndex.libraries[contract] = changesByContract[contract]
       } else {
         const report = ASTVersionedReport.create(changesByContract[contract])
@@ -184,9 +193,9 @@ export class ASTVersionedReport {
  */
 export class ASTDetailedVersionedReport {
 
-  static create = (fullReports: ASTReports, artifacts: BuildArtifacts, categorizer: Categorizer): ASTDetailedVersionedReport => {
+  static create = (fullReports: ASTReports, newArtifactsSet: BuildArtifacts[], categorizer: Categorizer): ASTDetailedVersionedReport => {
     const changes = CategorizedChanges.fromReports(fullReports, categorizer)
-    const reportIndex: ASTVersionedReportIndex = ASTVersionedReport.createByContract(changes, artifacts)
+    const reportIndex: ASTVersionedReportIndex = ASTVersionedReport.createByContract(changes, newArtifactsSet)
     return new ASTDetailedVersionedReport(reportIndex.contracts, reportIndex.libraries)
   }
 

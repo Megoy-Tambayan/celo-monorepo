@@ -1,12 +1,11 @@
 import { exec, ExecException } from 'child_process'
 import path from 'path'
-
-import { CoreContracts } from './build'
+import { CoreContracts } from './consts'
 
 const UNSAFE_OPCODES = ['selfdestruct', 'delegatecall']
 
 // ignore deprecated and known contracts
-const IGNORE_CONTRACTS = ['ReleaseGold', 'TransferWhitelist']
+const IGNORE_CONTRACTS = ['ReleaseGold']
 const CHECK_CONTRACTS = CoreContracts.filter((c) => !IGNORE_CONTRACTS.includes(c))
 
 const handleGrepOutput = (err: ExecException, grepOutput: string, stderr: string) => {
@@ -22,13 +21,14 @@ const handleGrepOutput = (err: ExecException, grepOutput: string, stderr: string
     const contractMatch = contractPath.slice(contractPath.lastIndexOf('/') + 1)
     if (CHECK_CONTRACTS.includes(contractMatch)) {
       safe = false
-      console.error(`Core contract ${contractMatch} should not include ${UNSAFE_OPCODES} opcodes`)
+      console.error(
+        `Core contract ${contractMatch} should not include ${UNSAFE_OPCODES.join('+')} opcodes`
+      )
     }
   })
 
   if (safe) {
-    // tslint:disable:no-console
-    console.log(`Core contracts are safe against ${UNSAFE_OPCODES} vulnerabilities`)
+    console.info(`Core contracts are safe against ${UNSAFE_OPCODES.join('+')} vulnerabilities`)
   } else {
     process.exit(1)
   }

@@ -1,10 +1,9 @@
 // @ts-ignore
-import { blsPrivateKeyToProcessedPrivateKey } from '@celo/utils/lib/bls'
+import * as bls12377js from '@celo/bls12377js'
+import { blsPrivateKeyToProcessedPrivateKey } from '@celo/cryptographic-utils/lib/bls'
 import BigNumber from 'bignumber.js'
-import * as bip32 from 'bip32'
+import { BIP32Factory, BIP32Interface } from 'bip32'
 import * as bip39 from 'bip39'
-import * as bls12377js from 'bls12377js'
-import { ec as EC } from 'elliptic'
 import fs from 'fs'
 import { merge, range, repeat } from 'lodash'
 import { tmpdir } from 'os'
@@ -12,6 +11,7 @@ import path from 'path'
 import * as rlp from 'rlp'
 import { MyceloGenesisConfig } from 'src/lib/interfaces/mycelo-genesis-config'
 import { CurrencyPair } from 'src/lib/k8s-oracle/base'
+import * as ecc from 'tiny-secp256k1'
 import Web3 from 'web3'
 import { spawnCmd, spawnCmdWithExitOnFailure } from './cmd-utils'
 import { envVar, fetchEnv, fetchEnvOrFallback, monorepoRoot } from './env-utils'
@@ -23,10 +23,11 @@ import {
   REGISTRY_ADDRESS,
   TEMPLATE,
 } from './genesis_constants'
+import { getIndexForLoadTestThread } from './geth'
 import { GenesisConfig } from './interfaces/genesis-config'
 import { ensure0x, strip0x } from './utils'
 
-const ec = new EC('secp256k1')
+const bip32 = BIP32Factory(ecc)
 
 export enum AccountType {
   VALIDATOR = 0,
@@ -119,7 +120,7 @@ export const generateOraclePrivateKey = (
 export const generatePrivateKeyWithDerivations = (mnemonic: string, derivations: number[]) => {
   const seed = bip39.mnemonicToSeedSync(mnemonic)
   const node = bip32.fromSeed(seed)
-  const newNode = derivations.reduce((n: bip32.BIP32Interface, derivation: number) => {
+  const newNode = derivations.reduce((n: BIP32Interface, derivation: number) => {
     return n.derive(derivation)
   }, node)
   return newNode.privateKey!.toString('hex')
@@ -133,6 +134,11 @@ export const generateAddress = (mnemonic: string, accountType: AccountType, inde
   privateKeyToAddress(generatePrivateKey(mnemonic, accountType, index))
 
 export const privateKeyToPublicKey = (privateKey: string): string => {
+  // NOTE: elliptic is disabled elsewhere in this library to prevent
+  // accidental signing of truncated messages.
+  // eslint-disable-next-line:import-blacklist
+  const EC = require('elliptic').ec
+  const ec = new EC('secp256k1')
   const ecPrivateKey = ec.keyFromPrivate(Buffer.from(privateKey, 'hex'))
   const ecPublicKey: string = ecPrivateKey.getPublic('hex')
   return ecPublicKey.slice(2)
@@ -198,6 +204,26 @@ const getFaucetedAccountsFor = (
   }))
 }
 
+const getFaucetedAccountsForLoadTest = (
+  accountType: AccountType,
+  mnemonic: string,
+  clients: number,
+  threads: number,
+  balance: string
+) => {
+  const addresses: string[] = []
+  for (const podIndex of range(0, clients)) {
+    for (const threadIndex of range(0, threads)) {
+      const index = getIndexForLoadTestThread(podIndex, threadIndex)
+      addresses.push(strip0x(generateAddress(mnemonic, accountType, parseInt(`${index}`, 10))))
+    }
+  }
+  return addresses.map((address) => ({
+    address,
+    balance,
+  }))
+}
+
 export const getFaucetedAccounts = (mnemonic: string) => {
   const numFaucetAccounts = parseInt(fetchEnvOrFallback(envVar.FAUCET_GENESIS_ACCOUNTS, '0'), 10)
   const faucetAccounts = getFaucetedAccountsFor(
@@ -208,10 +234,13 @@ export const getFaucetedAccounts = (mnemonic: string) => {
   )
 
   const numLoadTestAccounts = parseInt(fetchEnvOrFallback(envVar.LOAD_TEST_CLIENTS, '0'), 10)
-  const loadTestAccounts = getFaucetedAccountsFor(
+  const numLoadTestThreads = parseInt(fetchEnvOrFallback(envVar.LOAD_TEST_THREADS, '0'), 10)
+
+  const loadTestAccounts = getFaucetedAccountsForLoadTest(
     AccountType.LOAD_TESTING_ACCOUNT,
     mnemonic,
     numLoadTestAccounts,
+    numLoadTestThreads,
     faucetBalance()
   )
 
@@ -244,9 +273,9 @@ const hardForkActivationBlock = (key: string) => {
 
 export const generateGenesisFromEnv = (enablePetersburg: boolean = true) => {
   const mnemonic = fetchEnv(envVar.MNEMONIC)
-  const validatorEnv = fetchEnv(envVar.VALIDATORS)
+  const validatorEnv = parseInt(fetchEnv(envVar.VALIDATORS), 10)
   const genesisAccountsEnv = fetchEnvOrFallback(envVar.GENESIS_ACCOUNTS, '')
-  const validators = getValidatorsInformation(mnemonic, parseInt(validatorEnv, 10))
+  const validators = getValidatorsInformation(mnemonic, validatorEnv)
 
   const consensusType = fetchEnv(envVar.CONSENSUS_TYPE) as ConsensusType
 
@@ -291,6 +320,7 @@ export const generateGenesisFromEnv = (enablePetersburg: boolean = true) => {
   // Celo hard fork activation blocks.  Default is undefined, which means not activated.
   const churritoBlock = hardForkActivationBlock(envVar.CHURRITO_BLOCK)
   const donutBlock = hardForkActivationBlock(envVar.DONUT_BLOCK)
+  const espressoBlock = hardForkActivationBlock(envVar.ESPRESSO_BLOCK)
 
   // network start timestamp
   const timestamp = parseInt(fetchEnvOrFallback(envVar.TIMESTAMP, '0'), 10)
@@ -308,6 +338,7 @@ export const generateGenesisFromEnv = (enablePetersburg: boolean = true) => {
     timestamp,
     churritoBlock,
     donutBlock,
+    espressoBlock,
   })
 }
 
@@ -329,24 +360,24 @@ export const generateIstanbulExtraData = (validators: Validator[]) => {
         validators.map((validator) => Buffer.from(validator.address, 'hex')),
         validators.map((validator) => Buffer.from(validator.blsPublicKey, 'hex')),
         // Removed validators
-        new Buffer(0),
+        Buffer.alloc(0),
         // Seal
         Buffer.from(repeat('0', ecdsaSignatureVanity * 2), 'hex'),
         [
           // AggregatedSeal.Bitmap
-          new Buffer(0),
+          Buffer.alloc(0),
           // AggregatedSeal.Signature
           Buffer.from(repeat('0', blsSignatureVanity * 2), 'hex'),
           // AggregatedSeal.Round
-          new Buffer(0),
+          Buffer.alloc(0),
         ],
         [
           // ParentAggregatedSeal.Bitmap
-          new Buffer(0),
+          Buffer.alloc(0),
           // ParentAggregatedSeal.Signature
           Buffer.from(repeat('0', blsSignatureVanity * 2), 'hex'),
           // ParentAggregatedSeal.Round
-          new Buffer(0),
+          Buffer.alloc(0),
         ],
       ])
       .toString('hex')
@@ -366,6 +397,8 @@ export const generateGenesis = ({
   timestamp = 0,
   churritoBlock,
   donutBlock,
+  espressoBlock,
+  gingerbreadBlock,
 }: GenesisConfig): string => {
   const genesis: any = { ...TEMPLATE }
 
@@ -378,6 +411,12 @@ export const generateGenesis = ({
   }
   if (typeof donutBlock === 'number') {
     genesis.config.donutBlock = donutBlock
+  }
+  if (typeof espressoBlock === 'number') {
+    genesis.config.espressoBlock = espressoBlock
+  }
+  if (typeof gingerbreadBlock === 'number') {
+    genesis.config.gingerbreadBlock = gingerbreadBlock
   }
 
   genesis.config.chainId = chainId
@@ -436,9 +475,7 @@ export const generateGenesis = ({
     }
   }
 
-  if (timestamp > 0) {
-    genesis.timestamp = timestamp.toString()
-  }
+  genesis.timestamp = timestamp > 0 ? timestamp.toString() : '0x0'
 
   return JSON.stringify(genesis, null, 2)
 }
@@ -505,6 +542,12 @@ export const generateGenesisWithMigrations = async ({
   }
   if (genesisConfig.donutBlock !== undefined) {
     mcConfig.hardforks.donutBlock = genesisConfig.donutBlock
+  }
+  if (genesisConfig.espressoBlock !== undefined) {
+    mcConfig.hardforks.espressoBlock = genesisConfig.espressoBlock
+  }
+  if (genesisConfig.gingerbreadBlock !== undefined) {
+    mcConfig.hardforks.gingerbreadBlock = genesisConfig.gingerbreadBlock
   }
   if (genesisConfig.timestamp !== undefined) {
     mcConfig.genesisTimestamp = genesisConfig.timestamp

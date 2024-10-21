@@ -1,3 +1,9 @@
+contractPackages = require('./contractPackages.js')
+
+const MENTO_PACKAGE = contractPackages.MENTO_PACKAGE
+// __contractPackage field is used to specify which contract package this contract belongs to
+// leaving it undefined assumes it's a monorepo contract
+
 const DefaultConstitution = {
   Accounts: {
     default: 0.6,
@@ -11,7 +17,6 @@ const DefaultConstitution = {
   },
   BlockchainParameters: {
     default: 0.9,
-    setMinimumClientVersion: 0.9,
     setBlockGasLimit: 0.8,
     setIntrinsicGasForAlternativeFeeCurrency: 0.8,
   },
@@ -42,25 +47,11 @@ const DefaultConstitution = {
   },
   Escrow: {
     default: 0.6,
-    setRegistry: 0.9,
+    addDefaultTrustedIssuer: 0.6,
+    removeDefaultTrustedIssuer: 0.6,
   },
-  Exchange: {
-    default: 0.8,
-    setRegistry: 0.9,
-    setUpdateFrequency: 0.8,
-    setMinimumReports: 0.8,
-    setStableToken: 0.8,
-    setSpread: 0.8,
-    setReserveFraction: 0.8,
-  },
-  ExchangeEUR: {
-    default: 0.8,
-    setRegistry: 0.9,
-    setUpdateFrequency: 0.8,
-    setMinimumReports: 0.8,
-    setStableToken: 0.8,
-    setSpread: 0.8,
-    setReserveFraction: 0.8,
+  FederatedAttestations: {
+    default: 0.6,
   },
   FeeCurrencyWhitelist: {
     default: 0.8,
@@ -77,6 +68,7 @@ const DefaultConstitution = {
     setAdjustmentSpeed: 0.7,
     setTargetDensity: 0.7,
     setGasPriceMinimumFloor: 0.7,
+    __contractPackage: contractPackages.SOLIDITY_08_PACKAGE,
   },
   GoldToken: {
     default: 0.9,
@@ -92,7 +84,6 @@ const DefaultConstitution = {
     setMinDeposit: 0.9,
     setQueueExpiry: 0.9,
     setDequeueFrequency: 0.9,
-    setApprovalStageDuration: 0.9,
     setReferendumStageDuration: 0.9,
     setExecutionStageDuration: 0.9,
     setParticipationBaseline: 0.9,
@@ -112,6 +103,9 @@ const DefaultConstitution = {
     addSlasher: 0.9,
     removeSlasher: 0.8,
   },
+  OdisPayments: {
+    default: 0.6,
+  },
   // Values for all proxied contracts.
   proxy: {
     _transferOwnership: 0.9,
@@ -126,6 +120,25 @@ const DefaultConstitution = {
     default: 0.9,
     setAddressFor: 0.9,
   },
+  SortedOracles: {
+    default: 0.7,
+    setReportExpiry: 0.7,
+    addOracle: 0.8,
+    removeOracle: 0.7,
+  },
+  Validators: {
+    default: 0.7,
+    setRegistry: 0.9,
+    setMaxGroupSize: 0.7,
+    setMembershipHistoryLength: 0.7,
+    setGroupLockedGoldRequirements: 0.8,
+    setValidatorLockedGoldRequirements: 0.8,
+    setSlashingMultiplierResetPeriod: 0.7,
+    setValidatorScoreParameters: 0.7,
+  },
+}
+
+const constitutionExternal = {
   Reserve: {
     default: 0.9,
     setRegistry: 0.9,
@@ -140,12 +153,7 @@ const DefaultConstitution = {
     removeSpender: 0.8,
     addExchangeSpender: 0.9,
     removeExchangeSpender: 0.9,
-  },
-  SortedOracles: {
-    default: 0.7,
-    setReportExpiry: 0.7,
-    addOracle: 0.8,
-    removeOracle: 0.7,
+    __contractPackage: MENTO_PACKAGE,
   },
   StableToken: {
     default: 0.8,
@@ -154,6 +162,7 @@ const DefaultConstitution = {
     transfer: 0.6,
     transferWithComment: 0.6,
     approve: 0.6,
+    __contractPackage: MENTO_PACKAGE,
   },
   StableTokenEUR: {
     default: 0.8,
@@ -162,20 +171,59 @@ const DefaultConstitution = {
     transfer: 0.6,
     transferWithComment: 0.6,
     approve: 0.6,
+    __contractPackage: MENTO_PACKAGE,
   },
-  Validators: {
-    default: 0.7,
+  StableTokenBRL: {
+    default: 0.8,
     setRegistry: 0.9,
-    setMaxGroupSize: 0.7,
-    setMembershipHistoryLength: 0.7,
-    setGroupLockedGoldRequirements: 0.8,
-    setValidatorLockedGoldRequirements: 0.8,
-    setSlashingMultiplierResetPeriod: 0.7,
-    setValidatorScoreParameters: 0.7,
+    setInflationParameters: 0.9,
+    transfer: 0.6,
+    transferWithComment: 0.6,
+    approve: 0.6,
+    __contractPackage: MENTO_PACKAGE,
+  },
+  GrandaMento: {
+    default: 0.8,
+    cancelExchangeProposal: 0.6,
+    setApprover: 0.8,
+    setSpread: 0.8,
+    setStableTokenExchangeLimits: 0.8,
+    setVetoPeriodSeconds: 0.8,
+    __contractPackage: MENTO_PACKAGE,
+  },
+  Exchange: {
+    default: 0.8,
+    setRegistry: 0.9,
+    setUpdateFrequency: 0.8,
+    setMinimumReports: 0.8,
+    setStableToken: 0.8,
+    setSpread: 0.8,
+    setReserveFraction: 0.8,
+    __contractPackage: MENTO_PACKAGE,
+  },
+  ExchangeEUR: {
+    default: 0.8,
+    setRegistry: 0.9,
+    setUpdateFrequency: 0.8,
+    setMinimumReports: 0.8,
+    setStableToken: 0.8,
+    setSpread: 0.8,
+    setReserveFraction: 0.8,
+    __contractPackage: MENTO_PACKAGE,
+  },
+  ExchangeBRL: {
+    default: 0.8,
+    setRegistry: 0.9,
+    setUpdateFrequency: 0.8,
+    setMinimumReports: 0.8,
+    setStableToken: 0.8,
+    setSpread: 0.8,
+    setReserveFraction: 0.8,
+    __contractPackage: MENTO_PACKAGE,
   },
 }
 
-const constitution = DefaultConstitution
+const constitution = { ...DefaultConstitution, ...constitutionExternal }
 
 module.exports = {
   constitution,

@@ -8,9 +8,8 @@ contract RegistryHarness is IRegistryExtended {
 
   bytes32 constant ATTESTATIONS_REGISTRY_ID = keccak256(abi.encodePacked("Attestations"));
   bytes32 constant LOCKED_GOLD_REGISTRY_ID = keccak256(abi.encodePacked("LockedGold"));
-  bytes32 constant GAS_CURRENCY_WHITELIST_REGISTRY_ID = keccak256(
-    abi.encodePacked("GasCurrencyWhitelist")
-  );
+  bytes32 constant GAS_CURRENCY_WHITELIST_REGISTRY_ID =
+    keccak256(abi.encodePacked("GasCurrencyWhitelist"));
   bytes32 constant GOLD_TOKEN_REGISTRY_ID = keccak256(abi.encodePacked("GoldToken"));
   bytes32 constant GOVERNANCE_REGISTRY_ID = keccak256(abi.encodePacked("Governance"));
   bytes32 constant RESERVE_REGISTRY_ID = keccak256(abi.encodePacked("Reserve"));
@@ -24,6 +23,8 @@ contract RegistryHarness is IRegistryExtended {
   uint256 constant iamLockedGold = 4;
 
   uint256 whoami;
+
+  constructor(bool test) public RegistryHarness(test) {}
 
   function getAddressFor(bytes32 identifier) public returns (address) {
     if (identifier == VALIDATORS_REGISTRY_ID) {
@@ -145,5 +146,4 @@ contract RegistryHarness is IRegistryExtended {
     randomIndex = randomIndex.add(1);
     return randomAddressMap[randomIndex];
   }
-
 }

@@ -1,7 +1,6 @@
 import stringHash from 'string-hash'
 import {
   getAksClusterConfig,
-  getAwsClusterConfig,
   getCloudProviderFromContext,
   getContextDynamicEnvVarValues,
   getGCPClusterConfig,
@@ -9,7 +8,6 @@ import {
 import { DynamicEnvVar, envVar, fetchEnv, getDynamicEnvVarValue } from './env-utils'
 import { CloudProvider } from './k8s-cluster/base'
 import { AksFullNodeDeploymentConfig } from './k8s-fullnode/aks'
-import { AwsFullNodeDeploymentConfig } from './k8s-fullnode/aws'
 import { BaseFullNodeDeploymentConfig } from './k8s-fullnode/base'
 import { GCPFullNodeDeploymentConfig } from './k8s-fullnode/gcp'
 import { getFullNodeDeployer } from './k8s-fullnode/utils'
@@ -24,6 +22,10 @@ const contextFullNodeDeploymentEnvVars: {
   diskSizeGb: DynamicEnvVar.FULL_NODES_DISK_SIZE,
   replicas: DynamicEnvVar.FULL_NODES_COUNT,
   rollingUpdatePartition: DynamicEnvVar.FULL_NODES_ROLLING_UPDATE_PARTITION,
+  rpcApis: DynamicEnvVar.FULL_NODES_RPC_API_METHODS,
+  gcMode: DynamicEnvVar.FULL_NODES_GETH_GC_MODE,
+  wsPort: DynamicEnvVar.FULL_NODES_WS_PORT,
+  useGstoreData: DynamicEnvVar.FULL_NODES_USE_GSTORAGE_DATA,
 }
 
 /**
@@ -33,7 +35,6 @@ const contextFullNodeDeploymentEnvVars: {
 const deploymentConfigGetterByCloudProvider: {
   [key in CloudProvider]: (context: string) => BaseFullNodeDeploymentConfig
 } = {
-  [CloudProvider.AWS]: getAwsFullNodeDeploymentConfig,
   [CloudProvider.AZURE]: getAksFullNodeDeploymentConfig,
   [CloudProvider.GCP]: getGCPFullNodeDeploymentConfig,
 }
@@ -63,10 +64,10 @@ export function getFullNodeDeployerForContext(
     if (cloudProvider !== CloudProvider.GCP) {
       throw Error('Cannot create NEG for cloud providers other than GCP')
     }
-    deploymentConfig = ({
+    deploymentConfig = {
       ...deploymentConfig,
       createNEG: true,
-    } as unknown) as GCPFullNodeDeploymentConfig // make typescript happy
+    } as unknown as GCPFullNodeDeploymentConfig // make typescript happy
   }
   return getFullNodeDeployer(cloudProvider, celoEnv, deploymentConfig)
 }
@@ -82,7 +83,7 @@ export async function installFullNodeChart(
   createNEG: boolean = false
 ) {
   const deployer = getFullNodeDeployerForContext(celoEnv, context, staticNodes, createNEG)
-  const enodes = await deployer.installChart()
+  const enodes = await deployer.installChart(context)
   if (enodes) {
     await uploadStaticNodeEnodes(celoEnv, context, enodes)
   }
@@ -100,7 +101,7 @@ export async function upgradeFullNodeChart(
   createNEG: boolean = false
 ) {
   const deployer = getFullNodeDeployerForContext(celoEnv, context, generateNodeKeys, createNEG)
-  const enodes = await deployer.upgradeChart(reset)
+  const enodes = await deployer.upgradeChart(context, reset)
   if (enodes) {
     await uploadStaticNodeEnodes(celoEnv, context, enodes)
   }
@@ -145,10 +146,15 @@ function getFullNodeDeploymentConfig(context: string): BaseFullNodeDeploymentCon
     contextFullNodeDeploymentEnvVars,
     context
   )
+
   const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig = {
     diskSizeGb: parseInt(fullNodeDeploymentEnvVarValues.diskSizeGb, 10),
     replicas: parseInt(fullNodeDeploymentEnvVarValues.replicas, 10),
     rollingUpdatePartition: parseInt(fullNodeDeploymentEnvVarValues.rollingUpdatePartition, 10),
+    rpcApis: fullNodeDeploymentEnvVarValues.rpcApis,
+    gcMode: fullNodeDeploymentEnvVarValues.gcMode,
+    wsPort: parseInt(fullNodeDeploymentEnvVarValues.wsPort, 10),
+    useGstoreData: fullNodeDeploymentEnvVarValues.useGstoreData,
   }
   return fullNodeDeploymentConfig
 }
@@ -157,9 +163,8 @@ function getFullNodeDeploymentConfig(context: string): BaseFullNodeDeploymentCon
  * For a given context, returns the appropriate AksFullNodeDeploymentConfig
  */
 function getAksFullNodeDeploymentConfig(context: string): AksFullNodeDeploymentConfig {
-  const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig = getFullNodeDeploymentConfig(
-    context
-  )
+  const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig =
+    getFullNodeDeploymentConfig(context)
   return {
     ...fullNodeDeploymentConfig,
     clusterConfig: getAksClusterConfig(context),
@@ -167,25 +172,11 @@ function getAksFullNodeDeploymentConfig(context: string): AksFullNodeDeploymentC
 }
 
 /**
- * For a given context, returns the appropriate AwsFullNodeDeploymentConfig
- */
-function getAwsFullNodeDeploymentConfig(context: string): AwsFullNodeDeploymentConfig {
-  const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig = getFullNodeDeploymentConfig(
-    context
-  )
-  return {
-    ...fullNodeDeploymentConfig,
-    clusterConfig: getAwsClusterConfig(context),
-  }
-}
-
-/**
  * For a given context, returns the appropriate getGCPFullNodeDeploymentConfig
  */
 function getGCPFullNodeDeploymentConfig(context: string): GCPFullNodeDeploymentConfig {
-  const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig = getFullNodeDeploymentConfig(
-    context
-  )
+  const fullNodeDeploymentConfig: BaseFullNodeDeploymentConfig =
+    getFullNodeDeploymentConfig(context)
   return {
     ...fullNodeDeploymentConfig,
     clusterConfig: getGCPClusterConfig(context),

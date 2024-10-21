@@ -23,36 +23,23 @@ export function execCmd(
       pipeOutput = true
     }
 
-    const execProcess = exec(
-      cmd,
-      { maxBuffer: 1024 * 10000, ...execOptions },
-      (err, stdout, stderr) => {
-        if (process.env.CELOTOOL_VERBOSE === 'true') {
-          console.debug(stdout.toString())
-        }
-        if (err || process.env.CELOTOOL_VERBOSE === 'true') {
-          console.error(stderr.toString())
-        }
-        if (err) {
-          if (rejectWithOutput) {
-            reject([err, stdout.toString(), stderr.toString()])
-          } else {
-            reject(err)
-          }
+    exec(cmd, { maxBuffer: 1024 * 10000, ...execOptions }, (err, stdout, stderr) => {
+      if (pipeOutput) {
+        console.debug(stdout.toString())
+      }
+      if (err || pipeOutput) {
+        console.error(stderr.toString())
+      }
+      if (err) {
+        if (rejectWithOutput) {
+          reject([err, stdout.toString(), stderr.toString()])
         } else {
-          resolve([stdout.toString(), stderr.toString()])
+          reject(err)
         }
+      } else {
+        resolve([stdout.toString(), stderr.toString()])
       }
-    )
-
-    if (pipeOutput) {
-      if (execProcess.stdout) {
-        execProcess.stdout.pipe(process.stdout)
-      }
-      if (execProcess.stderr) {
-        execProcess.stderr.pipe(process.stderr)
-      }
-    }
+    })
   })
 }
 
@@ -61,7 +48,7 @@ export function spawnCmd(
   args: string[],
   options?: SpawnOptions & { silent?: boolean }
 ) {
-  return new Promise<number>(async (resolve, reject) => {
+  return new Promise<number | null>(async (resolve, reject) => {
     const { silent, ...spawnOptions } = options || { silent: false }
     if (!silent) {
       console.debug('$ ' + [cmd].concat(args).join(' '))

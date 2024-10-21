@@ -124,13 +124,12 @@ library SortedLinkedList {
   /**
    * @notice Gets all elements from the doubly linked list.
    * @param list A storage pointer to the underlying list.
-   * @return An unpacked list of elements from largest to smallest.
+   * @return Array of all keys in the list.
+   * @return Values corresponding to keys, which will be ordered largest to smallest.
    */
-  function getElements(List storage list)
-    internal
-    view
-    returns (bytes32[] memory, uint256[] memory)
-  {
+  function getElements(
+    List storage list
+  ) internal view returns (bytes32[] memory, uint256[] memory) {
     bytes32[] memory keys = getKeys(list);
     uint256[] memory values = new uint256[](keys.length);
     for (uint256 i = 0; i < keys.length; i = i.add(1)) {
@@ -165,7 +164,8 @@ library SortedLinkedList {
    * @param value The element value.
    * @param lesserKey The key of the element which could be just left of the new value.
    * @param greaterKey The key of the element which could be just right of the new value.
-   * @return The correct lesserKey/greaterKey keys.
+   * @return The correct lesserKey keys.
+   * @return The correct greaterKey keys.
    */
   function getLesserAndGreater(
     List storage list,
@@ -207,11 +207,12 @@ library SortedLinkedList {
    * @param greaterKey The key of the element whose value should be greaterKey.
    * @return True if the given element is between the two other elements.
    */
-  function isValueBetween(List storage list, uint256 value, bytes32 lesserKey, bytes32 greaterKey)
-    private
-    view
-    returns (bool)
-  {
+  function isValueBetween(
+    List storage list,
+    uint256 value,
+    bytes32 lesserKey,
+    bytes32 greaterKey
+  ) private view returns (bool) {
     bool isLesser = lesserKey == bytes32(0) || list.values[lesserKey] <= value;
     bool isGreater = greaterKey == bytes32(0) || list.values[greaterKey] >= value;
     return isLesser && isGreater;

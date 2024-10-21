@@ -1,13 +1,13 @@
-pragma solidity ^0.5.13;
+pragma solidity >=0.5.13 <0.9.0;
 
 /**
  * @title A mock SortedOracles for testing.
  */
 contract MockSortedOracles {
-  uint256 public constant DENOMINATOR = 0x10000000000000000;
+  uint256 public constant DENOMINATOR = 1000000000000000000000000;
   mapping(address => uint256) public numerators;
   mapping(address => uint256) public medianTimestamp;
-  mapping(address => uint256) public numRates;
+  mapping(address => uint256) public _numRates;
   mapping(address => bool) public expired;
 
   function setMedianRate(address token, uint256 numerator) external returns (bool) {
@@ -21,22 +21,29 @@ contract MockSortedOracles {
 
   function setMedianTimestampToNow(address token) external {
     // solhint-disable-next-line not-rely-on-time
-    medianTimestamp[token] = uint128(now);
+    medianTimestamp[token] = uint128(block.timestamp);
   }
 
   function setNumRates(address token, uint256 rate) external {
-    numRates[token] = rate;
+    _numRates[token] = rate; // This change may breack something, TODO
+  }
+
+  function numRates(address token) external view returns (uint256) {
+    return _numRates[token];
   }
 
   function medianRate(address token) external view returns (uint256, uint256) {
-    return (numerators[token], DENOMINATOR);
-  }
-
-  function isOldestReportExpired(address token) public view returns (bool, address) {
-    return (expired[token], token);
+    if (numerators[token] > 0) {
+      return (numerators[token], DENOMINATOR);
+    }
+    return (0, 0);
   }
 
   function setOldestReportExpired(address token) public {
     expired[token] = true;
+  }
+
+  function isOldestReportExpired(address token) public view returns (bool, address) {
+    return (expired[token], token);
   }
 }

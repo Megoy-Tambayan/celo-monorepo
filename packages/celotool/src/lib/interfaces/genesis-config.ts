@@ -14,4 +14,6 @@ export interface GenesisConfig {
   // Activation block numbers for Celo hard forks, null for never activating
   churritoBlock?: number | null
   donutBlock?: number | null
+  espressoBlock?: number | null
+  gingerbreadBlock?: number | null
 }

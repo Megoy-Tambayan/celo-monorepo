@@ -12,14 +12,6 @@ library IntegerSortedLinkedList {
   using SortedLinkedList for SortedLinkedList.List;
 
   /**
-   * @notice Returns the storage, major, minor, and patch version of the contract.
-   * @return The storage, major, minor, and patch version of the contract.
-   */
-  function getVersionNumber() external pure returns (uint256, uint256, uint256, uint256) {
-    return (1, 1, 1, 0);
-  }
-
-  /**
    * @notice Inserts an element into a doubly linked list.
    * @param list A storage pointer to the underlying list.
    * @param key The key of the element to insert.
@@ -112,13 +104,12 @@ library IntegerSortedLinkedList {
   /**
    * @notice Gets all elements from the doubly linked list.
    * @param list A storage pointer to the underlying list.
-   * @return An unpacked list of elements from largest to smallest.
+   * @return Array of all keys in the list.
+   * @return Values corresponding to keys, which will be ordered largest to smallest.
    */
-  function getElements(SortedLinkedList.List storage list)
-    public
-    view
-    returns (uint256[] memory, uint256[] memory)
-  {
+  function getElements(
+    SortedLinkedList.List storage list
+  ) public view returns (uint256[] memory, uint256[] memory) {
     bytes32[] memory byteKeys = list.getKeys();
     uint256[] memory keys = new uint256[](byteKeys.length);
     uint256[] memory values = new uint256[](byteKeys.length);

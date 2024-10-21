@@ -1,4 +1,3 @@
-/* tslint:disable: no-console */
 import BigNumber from 'bignumber.js'
 import { assert } from 'chai'
 import fs from 'fs'
@@ -6,6 +5,7 @@ import { join as joinPath, resolve as resolvePath } from 'path'
 import readLastLines from 'read-last-lines'
 import Web3 from 'web3'
 import { spawnCmd, spawnCmdWithExitOnFailure } from '../lib/cmd-utils'
+import { envVar, fetchEnvOrFallback } from '../lib/env-utils'
 import {
   AccountType,
   getPrivateKeysFor,
@@ -22,6 +22,7 @@ import {
   getEnodeAddress,
   getLogFilename,
   initAndStartGeth,
+  initGeth,
   migrateContracts,
   resetDataDir,
   restoreDatadir,
@@ -33,6 +34,7 @@ import {
 import { GethInstanceConfig } from '../lib/interfaces/geth-instance-config'
 import { GethRepository } from '../lib/interfaces/geth-repository'
 import { GethRunConfig } from '../lib/interfaces/geth-run-config'
+import { stringToBoolean } from '../lib/utils'
 
 const MonorepoRoot = resolvePath(joinPath(__dirname, '../..', '../..'))
 const verboseOutput = false
@@ -55,6 +57,7 @@ export async function initAndSyncGethWithRetry(
       await waitToFinishInstanceSyncing(instance)
       break
     } catch (error) {
+      // eslint-disable-next-line  @typescript-eslint/restrict-template-expressions
       console.info(`initAndSyncGethWithRetry error: ${error}`)
       const logFilename = getLogFilename(gethConfig.runPath, instance)
       console.info(`tail -50 ${logFilename}`)
@@ -73,7 +76,9 @@ export async function initAndSyncGethWithRetry(
 
 export async function waitToFinishInstanceSyncing(instance: GethInstanceConfig) {
   const { wsport, rpcport } = instance
+  console.info(`${instance.name}: syncing start`)
   await waitToFinishSyncing(new Web3(`${rpcport ? 'http' : 'ws'}://localhost:${rpcport || wsport}`))
+  console.info(`${instance.name}: syncing finished`)
 }
 
 export async function waitToFinishSyncing(web3: any) {
@@ -98,6 +103,16 @@ export async function waitForEpochTransition(web3: Web3, epoch: number) {
     blockNumber = await web3.eth.getBlockNumber()
     await sleep(0.1)
   } while (blockNumber % epoch !== 1)
+}
+
+export async function waitForAnnounceToStabilize(web3: Web3) {
+  // Due to a problem in the announce protocol's settings, it can take a minute for all the validators
+  // to be aware of each other even though they are connected.  This can lead to the first validator missing
+  // block signatures initially.  So we wait for that to pass.
+  // Before we used mycelo, this wasn't noticeable because the migrations  meant that the network would have
+  // been running for close to 10 minutes already, which was more than enough time.
+  // TODO: This function and its uses can be removed after the announce startup behavior has been resolved.
+  await waitForBlock(web3, 70)
 }
 
 export function assertAlmostEqual(
@@ -169,7 +184,7 @@ export async function shutdownOrKill(identifier: string | number, signal: Signal
 
 export function sleep(seconds: number, verbose = false) {
   if (verbose) {
-    console.log(`Sleeping for ${seconds} seconds. Stay tuned!`)
+    console.info(`Sleeping for ${seconds} seconds. Stay tuned!`)
   }
   return new Promise<void>((resolve) => setTimeout(resolve, seconds * 1000))
 }
@@ -178,7 +193,7 @@ export async function assertRevert(promise: any, errorMessage: string = ''): Pro
   try {
     await promise
     assert.fail('Expected revert not received')
-  } catch (error) {
+  } catch (error: any) {
     const revertFound = error.message.search('revert') >= 0
     if (errorMessage === '') {
       assert(revertFound, `Expected "revert", got ${error} instead`)
@@ -198,10 +213,14 @@ function gethRepositoryFromFlags() {
 }
 
 export function getHooks(gethConfig: GethRunConfig) {
-  return getContext(gethConfig).hooks
+  return getContext(gethConfig, true).hooks
 }
 
 export function getContext(gethConfig: GethRunConfig, verbose: boolean = verboseOutput) {
+  // Use of mycelo can be enabled through gethConfig or through an env variable
+  const useMycelo =
+    !!gethConfig.useMycelo ||
+    stringToBoolean(fetchEnvOrFallback(envVar.E2E_TESTS_FORCE_USE_MYCELO, 'false'))
   const validatorInstances = gethConfig.instances.filter((x: any) => x.validating)
 
   const numValidators = validatorInstances.length
@@ -216,7 +235,7 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
   const proxyNodeKeys = getPrivateKeysFor(AccountType.PROXY, mnemonic, numProxies)
   const proxyEnodes = proxyNodeKeys.map((x: string, i: number) => [
     proxyInstances[i].name,
-    getEnodeAddress(privateKeyToPublicKey(x), '127.0.0.1', proxyInstances[i].proxyport!),
+    getEnodeAddress(privateKeyToPublicKey(x), '127.0.0.1', proxyInstances[i].proxyport),
     getEnodeAddress(privateKeyToPublicKey(x), '127.0.0.1', proxyInstances[i].port),
   ])
 
@@ -227,7 +246,7 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
       await checkoutGethRepo(repo.branch || 'master', repo.path)
     }
 
-    if (gethConfig.useMycelo) {
+    if (useMycelo) {
       await buildGethAll(repo.path)
     } else {
       await buildGeth(repo.path)
@@ -238,11 +257,10 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
     }
 
     if (!fs.existsSync(gethConfig.runPath)) {
-      // @ts-ignore
       fs.mkdirSync(gethConfig.runPath, { recursive: true })
     }
 
-    if (gethConfig.useMycelo) {
+    if (useMycelo) {
       // Compile the contracts first because mycelo assumes they are compiled already, unless told not to
       if (!gethConfig.myceloSkipCompilingContracts) {
         await spawnCmdWithExitOnFailure('yarn', ['truffle', 'compile'], {
@@ -251,7 +269,7 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
       }
       await writeGenesisWithMigrations(gethConfig, repo.path, mnemonic, validators.length, verbose)
     } else {
-      await writeGenesis(gethConfig, validators, verbose)
+      writeGenesis(gethConfig, validators, verbose)
     }
 
     let validatorIndex = 0
@@ -267,7 +285,7 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
           throw new Error('proxied validator must have exactly one proxy')
         }
 
-        instance.proxies = [proxyEnode[0][1]!, proxyEnode[0][2]!]
+        instance.proxies = [proxyEnode[0][1], proxyEnode[0][2]]
       }
 
       // Set the private key for the validator or proxy instance
@@ -280,7 +298,7 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
       }
 
       if (!instance.minerValidator && (instance.validating || instance.isProxied)) {
-        instance.minerValidator = privateKeyToAddress(instance.privateKey!)
+        instance.minerValidator = privateKeyToAddress(instance.privateKey)
       }
     }
 
@@ -295,8 +313,17 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
           throw new Error('proxied validator must have exactly one proxy')
         }
 
-        instance.proxiedValidatorAddress = privateKeyToAddress(proxiedValidator[0].privateKey!)
+        instance.proxiedValidatorAddress = privateKeyToAddress(proxiedValidator[0].privateKey)
       }
+    }
+
+    if (useMycelo || !(gethConfig.migrate || gethConfig.migrateTo)) {
+      // Just need to initialize the nodes in this case.  No need to actually start the network
+      // since we don't need to run the migrations against it.
+      for (const instance of gethConfig.instances) {
+        await initGeth(gethConfig, gethBinaryPath, instance, verbose)
+      }
+      return
     }
 
     // Start all the instances
@@ -307,20 +334,18 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
     // Directly connect validator peers that are not using a bootnode or proxy.
     await connectValidatorPeers(gethConfig.instances)
 
-    if (!gethConfig.useMycelo && (gethConfig.migrate || gethConfig.migrateTo)) {
-      await Promise.all(
-        gethConfig.instances.filter((i) => i.validating).map((i) => waitToFinishInstanceSyncing(i))
-      )
+    await Promise.all(
+      gethConfig.instances.filter((i) => i.validating).map((i) => waitToFinishInstanceSyncing(i))
+    )
 
-      await migrateContracts(
-        MonorepoRoot,
-        validatorPrivateKeys,
-        attestationKeys,
-        validators.map((x) => x.address),
-        gethConfig.migrateTo,
-        gethConfig.migrationOverrides
-      )
-    }
+    await migrateContracts(
+      MonorepoRoot,
+      validatorPrivateKeys,
+      attestationKeys,
+      validators.map((x) => x.address),
+      gethConfig.migrateTo,
+      gethConfig.migrationOverrides
+    )
   }
 
   const before = async () => {
@@ -351,15 +376,25 @@ export function getContext(gethConfig: GethRunConfig, verbose: boolean = verbose
       }
     }
 
+    // restore data dirs
     await Promise.all(
-      gethConfig.instances.map(async (instance, i) => {
-        await restoreDatadir(gethConfig.runPath, instance)
-        if (!instance.privateKey && instance.validating) {
-          instance.privateKey = validatorPrivateKeys[validatorIndices[i]]
-        }
-        return startGeth(gethConfig, gethBinaryPath, instance, verbose)
-      })
+      gethConfig.instances.map((instance) => restoreDatadir(gethConfig.runPath, instance))
     )
+
+    // do in sequence, not concurrently to avoid flaky errors
+    for (let i = 0; i < gethConfig.instances.length; i++) {
+      const instance = gethConfig.instances[i]
+      if (!instance.privateKey && instance.validating) {
+        instance.privateKey = validatorPrivateKeys[validatorIndices[i]]
+      }
+
+      if (!instance.minerValidator && (instance.validating || instance.isProxied)) {
+        instance.minerValidator = privateKeyToAddress(instance.privateKey!)
+      }
+
+      await startGeth(gethConfig, gethBinaryPath, instance, verbose)
+    }
+
     await connectValidatorPeers(gethConfig.instances)
   }
 

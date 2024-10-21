@@ -1,4 +1,3 @@
-/* tslint:disable no-console */
 import { addCeloEnvMiddleware, CeloEnvArgv } from 'src/lib/env-utils'
 import {
   coerceMnemonicAccountType,
@@ -9,8 +8,7 @@ import yargs from 'yargs'
 
 export const command = 'address-from-env'
 
-export const describe =
-  'command for fetching addresses for the different account types using the environment mnemonic'
+export const describe = 'command for fetching addresses as specified by the current environment'
 
 interface AccountAddressArgv extends CeloEnvArgv {
   index: number
@@ -37,7 +35,7 @@ export const builder = (argv: yargs.Argv) => {
   )
 }
 
-export const handler = async (argv: CeloEnvArgv & AccountAddressArgv) => {
+export const handler = (argv: CeloEnvArgv & AccountAddressArgv) => {
   const validatorAddress = getAddressFromEnv(
     coerceMnemonicAccountType(argv.accountType),
     argv.index

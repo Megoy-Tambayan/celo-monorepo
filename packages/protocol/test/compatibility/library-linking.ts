@@ -12,8 +12,8 @@ const testCases = {
 describe('reportLibraryLinkingIncompatibilities', () => {
   it('detects when a linked library has changed', () => {
     const codeReport = reportASTIncompatibilities(
-      testCases.linked_libraries,
-      testCases.linked_libraries_upgraded_lib
+      [testCases.linked_libraries],
+      [testCases.linked_libraries_upgraded_lib]
     )
     const libraryLinksReport = reportLibraryLinkingIncompatibilities(
       {

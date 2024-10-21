@@ -75,6 +75,7 @@ lerna-debug.log
 
 # Typechain types
 **/types/typechain/
+**/types/typechain-*/
 
 # keys
 .env.mnemonic*
@@ -93,10 +94,14 @@ packages/docs/_book/
 .env.local
 
 # old packages
-packages/reserve-site/*
-packages/blockchain-api/*
-packages/komencikit/*
-packages/mobile/*
-packages/moonpay-auth/*
-packages/notification-service/*
-packages/react-components/*
+packages/phone-number-privacy/*
+packages/sdk/*
+packages/cli/*
+
+# temp json file for deploy-sdks script
+scripts/failedSDKs.json
+
+packages/protocol/types/typechain-mento/*.d.ts
+
+# Ignore generated credentials from google-github-actions/auth
+gha-creds-*.json

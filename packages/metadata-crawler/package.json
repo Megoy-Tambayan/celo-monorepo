@@ -9,18 +9,18 @@
   "homepage": "https://github.com/celo-org/celo-monorepo/tree/master/packages/metadata-crawler",
   "repository": "https://github.com/celo-org/celo-monorepo/tree/master/packages/metadata-crawler",
   "dependencies": {
-    "@celo/connect": "^5.1.2",
-    "@celo/contractkit": "^7.0.0",
-    "@celo/utils": "^5.0.6",
+    "@celo/connect": "^6.0.0",
+    "@celo/contractkit": "^8.1.0",
+    "@celo/utils": "^7.0.0",
     "@types/pg": "^7.14.3",
     "bunyan": "1.8.12",
     "bunyan-gke-stackdriver": "0.1.2",
     "debug": "^4.1.1",
     "dotenv": "^8.2.0",
-    "googleapis": "^39.2.0",
+    "googleapis": "^67.1.0",
     "pg": "^7.18.0",
     "ts-node": "^10.9.2",
-    "web3": "1.10.0"
+    "web3": "4.0.1"
   },
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.3",

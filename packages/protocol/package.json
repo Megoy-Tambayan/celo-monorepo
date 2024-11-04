@@ -87,7 +87,7 @@
     "chalk": "^2.4.2",
     "csv-parser": "^2.0.0",
     "csv-stringify": "^4.3.1",
-    "elliptic": "^6.5.4",
+    "elliptic": "^6.6.0",
     "ethereum-cryptography": "1.2.0",
     "ethereumjs-abi": "^0.6.8",
     "ethereumjs-wallet": "^0.6.3",

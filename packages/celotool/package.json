@@ -22,7 +22,7 @@
     "@google-cloud/secret-manager": "3.12.0",
     "@google-cloud/storage": "^2.4.3",
     "bignumber.js": "^9.0.0",
-    "bip32": "3.1.0",
+    "bip32": "4.0.0",
     "bip39": "https://github.com/bitcoinjs/bip39#d8ea080a18b40f301d4e2219a2991cd2417e83c2",
     "bunyan": "1.8.12",
     "bunyan-gke-stackdriver": "0.1.2",
@@ -44,7 +44,7 @@
     "tiny-secp256k1": "2.2.1",
     "chai": "^4.3.7",
     "mocha": "^10.2.0",
-    "web3": "1.10.0",
+    "web3": "4.0.1",
     "web3-eth-admin": "1.0.0-beta.55",
     "yargs": "17.7.2"
   },

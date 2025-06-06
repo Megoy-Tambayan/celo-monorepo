@@ -63,7 +63,7 @@
     "@0x/sol-coverage": "^4.0.47",
     "@0x/sol-profiler": "^4.1.37",
     "@0x/sol-trace": "^3.0.47",
-    "@0x/subproviders": "^7.0.1",
+    "@0x/subproviders": "^8.0.1",
     "@celo/base": "^6.0.0",
     "@celo/bls12377js": "0.1.1",
     "@celo/connect": "^5.1.2",
